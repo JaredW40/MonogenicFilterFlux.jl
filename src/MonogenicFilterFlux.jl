@@ -10,23 +10,6 @@ using RecipesBase
 using Base: tail
 using FourierFilterFlux
 
-#=  CUDA/cuFFT/cuDNN and Metal are *weak* dependencies now; see ext/CUDAExt.jl
-    and ext/MetalExt.jl. Nothing in src/ may reference them directly. All the
-    device-specific work is confined to two things the extensions provide:
-
-      1. Adapt.adapt_structure(dev, ::MonoConvFFT) - moves weights and
-         *rebuilds* the fft plan (a plan is a handle to backend state, it
-         cannot be memcpy'd between devices).
-      2. a backend plan constructor, used by (1).
-
-    Note that FourierFilterFlux's own CUDAExt/MetalExt are guaranteed to be
-    loaded alongside ours (as FourierFilterFlux is a hard dependency here, and
-    the two extensions have the same triggers), so the `Functors.@leaf` marks
-    on FFTW.rFFTWPlan/cFFTWPlan/Plan and the `Adapt.adapt(::CUDADevice,
-    ::FFTW.cFFTWPlan)` style methods already exist. We deliberately do not
-    repeat them here, as identical method signatures defined in two packages
-    would produce "method definition overwritten" warnings at precompile time. =#
-
 import Adapt: adapt
 import MLDataDevices: CPUDevice
 #=  FourierFilterFlux exports both of these, so `using FourierFilterFlux` puts
@@ -88,13 +71,6 @@ struct MonoConvFFT{D,OT,F,A,PD,P,T,S,AL}
     averagingLayer::AL
 end
 
-#=  MonoConvFFT holds an fft plan (P) and two non-array dispatch tags (bc, and
-    the σ/scale/averagingLayer settings). Functors must not walk into it: a
-    plan's fields are backend handles, and rebuilding the struct field-by-field
-    would silently lose the `OT` and `trainable` type parameters, since neither
-    is recoverable from the field values alone. Marking it a leaf routes every
-    `gpu`/`cpu`/`fmap` through `Adapt.adapt_structure`, which the extensions
-    implement and which preserves all the type parameters exactly. =#
 Functors.@leaf MonoConvFFT
 
 import Base: ndims

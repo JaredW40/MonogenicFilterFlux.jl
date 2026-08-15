@@ -1,32 +1,29 @@
+#=  Adapt, Functors and MLDataDevices are dependencies of MonogenicFilterFlux
+    but not necessarily of whatever environment you are running from. Reaching
+    them through the package rather than with `using` keeps this file working
+    under a bare `include("test/runtests.jl")` from any environment that has
+    the package at all, not just inside a Pkg.test sandbox. =#
 const Functors = MonogenicFilterFlux.Functors
 const adapt = MonogenicFilterFlux.adapt
 const CPUDevice = MonogenicFilterFlux.CPUDevice
 
 @testset "device movement machinery (no GPU required)" begin
-
     mono = MonogenicLayer((16, 16, 1, 2), scale=2, σ=abs)
 
     @testset "the layer is a Functors leaf" begin
-        #=  This is the property everything else rests on. If MonoConvFFT were
-            walkable, `gpu`/`cpu` would rebuild it field by field through the
-            bare positional constructor, which cannot recover `OT` or the
-            `trainable` flag, since neither is derivable from the field values.
-            Being a leaf routes every move through `adapt_structure`, which
-            preserves all nine type parameters.
-
-            It also keeps Functors out of the fft plan's internals: a plan is a
-            handle to backend state, and reconstructing one from its fields
-            produces something that type-checks and then misbehaves. =#
         @test Functors.isleaf(mono)
     end
 
     @testset "cpu() is a no-op on a CPU layer" begin
+        #=  Identity, not just equality: `adapt_structure(::CPUDevice, ...)`
+            returns a layer already on the host unchanged, so no plan is
+            rebuilt and no array is copied. If this ever weakens to `==`, the
+            layer is being reconstructed on every `cpu()` call. =#
         @test cpu(mono) === mono
         @test cpu(cpu(mono)) === mono
     end
 
     @testset "gpu() behaves according to has_gpu()" begin
-        #= Both branches assert, and the branch taken is logged. =#
         gpu_available = has_gpu()
         @info "device movement tests" has_gpu = gpu_available device = monogenic_device()
 
@@ -35,9 +32,7 @@ const CPUDevice = MonogenicFilterFlux.CPUDevice
             @test moved !== mono
             @test !(moved.weight isa Array)
             @test cpu(moved).weight ≈ mono.weight
-            #=  Type parameters that a functor-walking rebuild would lose. The
-                backend suites check this too, but this catches it even when
-                GROUP excludes the backend. =#
+  
             @test outType(moved) == outType(mono)
             @test isTrainable(moved) == isTrainable(mono)
         else
