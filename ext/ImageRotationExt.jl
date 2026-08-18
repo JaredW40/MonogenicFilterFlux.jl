@@ -1,7 +1,63 @@
-function inv_rotate_out(out, img, angle)
+module ImageRotationExt
 
+#=  Image rotation helpers for the rotated monogenic scattering transform =#
+
+using MonogenicFilterFlux
+using ImageTransformations
+
+function MonogenicFilterFlux.rotate_image(img, angle)
+	
+	if length(size(img)) == 4
+		x, y, fea_size, sample_size = size(img);
+
+		for fea = 1 : fea_size
+
+			for m = 1 : sample_size
+
+				rot_img = imrotate(img[:,:,fea,m], angle);
+				rot_img[isnan.(rot_img)] .= 0;
+				rot_img_par = parent(rot_img);
+				if fea == 1 & m == 1
+					xx, yy = size(rot_img_par);
+					global img_rotated = zeros(xx, yy, fea_size, sample_size);
+				end
+				img_rotated[:, :, fea, m] = rot_img_par;
+			end
+
+		end
+
+	elseif length(size(img)) == 5
+		x, y, fea_size1, fea_size2, sample_size = size(img);
+
+		for fea1 = 1 : fea_size1
+
+			for fea2 = 1 : fea_size2
+
+				for m = 1 : sample_size
+
+					rot_img = imrotate(img[:,:,fea1,fea2,m], angle);
+					rot_img[isnan.(rot_img)] .= 0;
+					rot_img_par = parent(rot_img);
+					if fea1 == 1 & fea2 == 1 & m == 1
+						xx, yy = size(rot_img_par);
+						global img_rotated = zeros(xx, yy, fea_size1, fea_size2, sample_size);
+					end
+					img_rotated[:, :, fea1, fea2, m] = rot_img_par;
+				end
+
+			end
+
+		end
+
+	end
+
+	return img_rotated
+
+end
+
+function MonogenicFilterFlux.inv_rotate_out(out, img, angle)
 	# Input
-	# out: the ouput after the scattering transform
+	# out: the output after the scattering transform
 	# img: the target image size for the scattering transform
 	# angle: the rotation angle
 
@@ -137,8 +193,6 @@ function inv_rotate_out(out, img, angle)
 		print("\n");
 	end
 
-
-
-	
-
 end
+
+end # module

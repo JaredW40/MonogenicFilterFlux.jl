@@ -13,8 +13,8 @@ function monogenic_filter(RHO; Monotype = GaussianLP())
     
     if typeof(Monotype) == GaussianLP
         # For Guassian Low Pass Filter
-        LP  =  exp.( -(RHO.^2)/8 );       # Gaussian low-pass filter
-        HP  =  sqrt.( 1 .- LP.^2 );          # Complementary high-pass filter
+        LP  =  exp.( -(RHO.^2)/8 );      # Gaussian low-pass filter
+        HP  =  sqrt.( 1 .- LP.^2 );      # Complementary high-pass filter
         
     elseif typeof(Monotype) == GaussianHP
         # For Guassian High Pass Filter
@@ -65,8 +65,8 @@ end
 #For filters
     # First filter: Rz
     # Second filter: RHO [2:3:end]
-    # Third filter: HP  [3:3:end] 
-    # Fourth filter: LP [4:3:end]
+    # Third filter: HP   [3:3:end] 
+    # Fourth filter: LP  [4:3:end]
 
 
 # similar to shearingLayer in ST
@@ -105,9 +105,3 @@ function MonogenicLayer(inputSize::Union{Int,NTuple{N, T}}; scale = 4,
     return MonoConvFFT(monogenic, inputSize, σ, plan=plan, boundary=boundary, dType = dType,
                    trainable=trainable, OT = dType, scale = scale, averagingLayer = averagingLayer)
 end
-
-
-
-
-
-

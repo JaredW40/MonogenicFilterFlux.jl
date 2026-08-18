@@ -1,0 +1,129 @@
+name: CI
+on:
+  workflow_dispatch: 
+  push:
+    paths:
+      - src/*
+      - ext/*
+      - test/*
+      - Project.toml
+      - .github/workflows/*
+    tags: "*"
+  pull_request:
+    paths:
+      - src/*
+      - ext/*
+      - test/*
+      - Manifest.toml
+      - Project.toml
+      - .github/workflows/*
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - "1.12"
+        os:
+          - ubuntu-latest
+          - macOS-latest
+        arch:
+          - x64
+        exclude:
+          - os: macOS-latest
+            arch: x64
+        include:
+          - os: macOS-latest
+            arch: aarch64
+            version: "1.12"
+    steps:
+      - uses: actions/checkout@v4
+
+      # MonogenicFilterFlux is developed in lockstep with the two packages
+      # below: the GPU support here depends on the ConvFFT/CWT GPU work landing
+      # there first, and the registered versions lag. Both are checked out into
+      # the workspace and dev'd in rather than resolved from the registry.
+      #
+      # We point FourierFilterFlux at whichever fork carries the 0.4.0 GPU work.
+      # [compat] here requires 0.4, and BoundaryValueProblems master was still
+      # 0.3.8 at the time of writing. 
+      #
+      # When these packages are registered with their recent changes, we can 
+      # remove the checkout and dev steps and just resolve from the registry.
+
+      - name: Check out ContinuousWavelets.jl
+        uses: actions/checkout@v4
+        with:
+          repository: JaredW40/ContinuousWavelets.jl
+          ref: master
+          path: deps/ContinuousWavelets.jl
+      - name: Check out FourierFilterFlux.jl
+        uses: actions/checkout@v4
+        with:
+          repository: JaredW40/FourierFilterFlux.jl
+          ref: master
+          path: deps/FourierFilterFlux.jl
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+
+      - name: Generate the CI environment
+        run: |
+          julia --project=ci -e '
+            using Pkg
+            Pkg.develop([
+              PackageSpec(path = "deps/ContinuousWavelets.jl"),
+              PackageSpec(path = "deps/FourierFilterFlux.jl"),
+              PackageSpec(path = "."),
+            ])
+            Pkg.add([
+              PackageSpec(name = "Test"),
+              PackageSpec(name = "BenchmarkTools"),
+              PackageSpec(name = "Wavelets"),
+              PackageSpec(name = "Zygote"),
+              PackageSpec(name = "Flux"),
+              PackageSpec(name = "FFTW"),
+              PackageSpec(name = "AbstractFFTs"),
+              PackageSpec(name = "Functors"),
+              PackageSpec(name = "Adapt"),
+              PackageSpec(name = "MLDataDevices"),
+              PackageSpec(name = "LinearAlgebra"),
+              PackageSpec(name = "Logging"),
+              PackageSpec(name = "Random"),
+            ])'
+
+      - name: Add the CUDA stack (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          julia --project=ci -e '
+            using Pkg
+            Pkg.add([
+              PackageSpec(name = "CUDA"),
+              PackageSpec(name = "cuDNN"),
+              PackageSpec(name = "cuFFT"),
+              PackageSpec(name = "CUDNN_jll", version = "9.20"),
+            ])'
+      - name: Add Metal (macOS only)
+        if: runner.os == 'macOS'
+        run: julia --project=ci -e 'using Pkg; Pkg.add("Metal")'
+ 
+      - name: Precompile
+        run: julia --project=ci -e 'using Pkg; Pkg.precompile()'
+
+      - name: Run tests
+        env:
+          GROUP: ${{ runner.os == 'Linux' && 'CUDA' || runner.os == 'macOS' && 'Metal' || 'CPU' }}
+        run: julia --project=ci --code-coverage=user -e 'include("test/runtests.jl")'
+ 
+      - uses: julia-actions/julia-processcoverage@v1
+      
+      - uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

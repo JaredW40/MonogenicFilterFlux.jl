@@ -1,54 +1,48 @@
-import FourierFilterFlux: getBatchSize
-
-function getBatchSize(c::C) where {C<:MonoConvFFT}
-    if typeof(c.fftPlan) <: Tuple
-        return c.fftPlan[2][end]
-    else
-        return c.fftPlan.sz[end]
-    end
-end
-
-import FourierFilterFlux: cu
-
-function cu(mono::MonoConvFFT{D,OT,F,A,PD,P,T,S,AL}) where {D,OT,F,A,PD,P,T,S,AL}
-
-    # D = mono.D
-    # OT = mono.OT
-    σ = mono.σ
-    boundary = mono.bc
-
-    # trainable = mono.T
-    scale = mono.scale
-
-    #averagingLayer = mono.averagingLayer
-    averagingLayer = AL
-
-    cuw = cu(mono.weight)
-    cuf = cu(mono.fftPlan)
-
-
-    return MonoConvFFT{D,OT,typeof(σ),typeof(cuw),typeof(boundary),typeof(cuf), T, typeof(scale), typeof(averagingLayer)}(mono.σ, cuw, boundary, cuf, scale, averagingLayer)
-end
-
+import FourierFilterFlux: getBatchSize, originalSize, originalDomain
 import Base: size
-import FourierFilterFlux: originalSize
 
-function size(l::C) where {C<:MonoConvFFT}
-    if typeof(l.fftPlan) <: Tuple
-        sz = l.fftPlan[2]
-    else
-        sz = l.fftPlan.sz
-    end
-    signalSize = originalSize(sz[1:ndims(l.weight[1])], l.bc)
-    return (signalSize..., sz[(ndims(l.weight[1])+1):end]...)
+#=  Plan geometry helpers.
+
+    `size(::AbstractFFTs.Plan)` rather than `plan.sz`. A cuFFT plan stores 
+    `input_size` and a Metal plan something else again, so anything touching 
+    `.sz` breaks the moment the layer moves onto a GPU. Tuple-wrapped plans 
+    unwrap to element 1, matching FourierFilterFlux's `_unwrap_plan`. =#
+
+_planSize(p::Nothing) = ()
+_planSize(p::Tuple) = _planSize(first(p))
+_planSize(p) = size(p)
+
+_planEltype(p::Nothing) = ComplexF32
+_planEltype(p::Tuple) = _planEltype(first(p))
+_planEltype(p) = eltype(p)
+
+"""
+    getBatchSize(c::MonoConvFFT)
+
+Number of examples the layer's plan was built for.
+"""
+getBatchSize(c::MonoConvFFT) = _planSize(c.fftPlan)[end]
+
+#=  ConvFFT stores a tuple of filter banks, so `weight[1]` is an array there and
+    `ndims(weight[1])` is its convolved-dimension count. MonoConvFFT stores a
+    single 3-tensor, so `weight[1]` is a scalar, `ndims` of it is 0, and
+    `sz[1:0]` silently dropped the signal dimensions - which happens to give
+    the right answer for Periodic and the padded size for everything else. The
+    convolved-dimension count is the layer's own `D` parameter. =#
+function size(l::MonoConvFFT)
+    D = ndims(l)
+    sz = _planSize(l.fftPlan)
+    signalSize = originalSize(sz[1:D], l.bc)
+    return (signalSize..., sz[(D+1):end]...)
 end
 
-function size(l::MonoConvFFT{D,OT,A,B,C,PD,P}) where {D,OT,A,B,C,PD,P<:Tuple}
-    if typeof(l.fftPlan[1]) <: Tuple
-        sz = l.fftPlan[1][2]
-    else
-        sz = l.fftPlan[1].sz
-    end
-    signalSize = originalSize(sz[1:ndims(l.weight[1])], l.bc)
-    return (signalSize..., sz[(ndims(l.weight[1])+1):end]...)
+"""
+    originalDomain(m::MonoConvFFT; σ = identity)
+
+The monogenic filter bank pulled back to the space domain, on the CPU whatever
+device the layer is on, with `σ` applied pointwise.
+"""
+function originalDomain(m::MonoConvFFT; σ=identity)
+    w = adapt(Array, m.weight)
+    return σ.(ifft(w, convDims(m)))
 end
