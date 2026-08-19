@@ -19,14 +19,13 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [weakdeps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
 cuFFT = "533571aa-0936-420e-b4be-9c66f5f626ca"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 ImageTransformations = "02fcd773-0e25-5acc-982a-7f6622650795"
 PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 
 [extensions]
-CUDAExt = ["CUDA", "cuDNN", "cuFFT"]
+CUDAExt = ["CUDA", "cuFFT"]
 ImageRotationExt = "ImageTransformations"
 MetalExt = "Metal"
 PyPlotExt = "PyPlot"
@@ -35,6 +34,7 @@ PyPlotExt = "PyPlot"
 AbstractFFTs = "1"
 Adapt = "4"
 CUDA = "6"
+cuFFT = "6.1"
 ContinuousWavelets = "1.2"
 FFTW = "1"
 Flux = "0.16"
@@ -48,8 +48,6 @@ PyPlot = "2.11"
 RecipesBase = "1.3.4"
 Reexport = "1"
 Zygote = "0.7"
-cuDNN = "6.1"
-cuFFT = "6.1"
 julia = "1.10"
 
 [extras]
