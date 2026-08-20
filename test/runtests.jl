@@ -19,9 +19,9 @@ end
 
 const HAS_CUDA = if GROUP in ("All", "CUDA")
     try
-        _loadBackend(:(using CUDA, cuDNN, cuFFT))
+        _loadBackend(:(using CUDA, cuFFT))
     catch e
-        @info "CUDA/cuDNN/cuFFT not available here -- skipping CUDATests.jl" exception = e
+        @info "CUDA/cuFFT not available here -- skipping CUDATests.jl" exception = e
         false
     end
 else
